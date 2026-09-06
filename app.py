@@ -410,3 +410,94 @@ def admin_publish():
     if not isinstance(rows, list):
       return jsonify({"error": "Missing rows"}), 400
 
+    cleaned = []
+    for r in rows:
+        try:
+            total = float(r.get("total"))
+        except (TypeError, ValueError):
+            return jsonify({"error": f"Row '{r.get('label', '')}' has no valid balance"}), 400
+        if r.get("portfolio") not in PORTFOLIOS:
+            return jsonify({"error": f"Row '{r.get('label', '')}' has no valid portfolio"}), 400
+        cleaned.append(
+            {
+                "id": r.get("id") or uuid.uuid4().hex,
+                "label": (r.get("label") or "").strip(),
+                "leaseId": r.get("leaseId"),
+                "total": total,
+                "portfolio": r["portfolio"],
+            }
+        )
+
+    data = {
+        "asOf": int(time.time()),
+        "sourceImage": source_image,
+        "rows": cleaned,
+    }
+    save_balances(data)
+    return jsonify({"ok": True, **data})
+
+
+@app.route("/api/portfolio-balances")
+def api_portfolio_balances():
+    portfolio = request.args.get("portfolio")
+    data = load_balances()
+    rows = data["rows"]
+    if portfolio:
+        rows = [r for r in rows if r.get("portfolio") == portfolio]
+    return jsonify({
+        "asOf": data.get("asOf"),
+        "rows": rows,
+        "total": sum(r["total"] for r in rows),
+    })
+
+
+@app.route("/admin/upload", methods=["POST"])
+@require_admin
+def admin_upload():
+    file = request.files.get("file")
+    caption = (request.form.get("caption") or "").strip()
+    portfolio = (request.form.get("portfolio") or "").strip()
+    if not file or file.filename == "":
+        return jsonify({"error": "No file provided"}), 400
+    if portfolio not in PORTFOLIOS:
+        return jsonify({"error": "Choose a valid portfolio"}), 400
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": f"Unsupported file type: .{ext}"}), 400
+
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    file.save(os.path.join(UPLOAD_FOLDER, filename))
+
+    entries = load_manifest()
+    entries.append(
+        {
+            "id": uuid.uuid4().hex,
+            "filename": filename,
+            "caption": caption,
+            "portfolio": portfolio,
+            "uploadedAt": int(time.time()),
+        }
+    )
+    save_manifest(entries)
+    return jsonify({"ok": True, "entries": entries})
+
+
+@app.route("/admin/delete/<entry_id>", methods=["POST"])
+@require_admin
+def admin_delete(entry_id):
+    entries = load_manifest()
+    keep, remove = [], []
+    for e in entries:
+        (remove if e["id"] == entry_id else keep).append(e)
+    for e in remove:
+        path = os.path.join(UPLOAD_FOLDER, e["filename"])
+        if os.path.exists(path):
+            os.remove(path)
+    save_manifest(keep)
+    return jsonify({"ok": True, "entries": keep})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=os.environ.get("DEBUG") == "1")
+
