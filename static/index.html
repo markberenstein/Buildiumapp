@@ -6,3 +6,383 @@
 <title>Outstanding Balances</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F2F1EC;
+    --panel: #FBFAF7;
+    --ink: #1B1F1D;
+    --ink-soft: #5B6158;
+    --ledger: #22463C;
+    --ledger-soft: #E4EBE7;
+    --brick: #A63D2F;
+    --brick-soft: #F5E4E0;
+    --amber: #93641F;
+    --amber-soft: #F2E9D8;
+    --hairline: #D9D6CC;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, sans-serif;
+    font-feature-settings: "tnum" 1;
+    min-height: 100vh;
+  }
+  .shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+  }
+  @media (max-width: 860px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { border-right: none; border-bottom: 1px solid var(--hairline); }
+  }
+
+  /* ---- Rail ---- */
+  .rail {
+    border-right: 1px solid var(--hairline);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .rail h1 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0 0 2px;
+    letter-spacing: -0.01em;
+  }
+  .rail .sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+  .summary-figure {
+    border-top: 1px solid var(--hairline);
+    padding-top: 18px;
+  }
+  .summary-figure .label {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .summary-figure .value {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .bucket-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--hairline);
+    padding-top: 18px;
+  }
+  .bucket-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13.5px;
+  }
+  .bucket-row .name { color: var(--ink-soft); }
+  .bucket-row .amt { font-weight: 600; }
+
+  .filter-block {
+    border-top: 1px solid var(--hairline);
+    padding-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .filter-block label {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  select, input[type="search"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13.5px;
+  }
+  .refresh-btn {
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid var(--hairline);
+  }
+  button.ghost {
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid var(--ledger);
+    color: var(--ledger);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.ghost:hover { background: var(--ledger-soft); }
+  button.ghost:disabled { opacity: 0.5; cursor: default; background: none; }
+  .as-of {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  /* ---- Main ---- */
+  main {
+    padding: 28px 32px 60px;
+    overflow-x: auto;
+  }
+  .main-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .main-head h2 {
+    font-size: 20px;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .search-box { width: 240px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 13.5px;
+  }
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--ink-soft);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th.num, td.num { text-align: right; }
+  thead th:hover { color: var(--ink); }
+  tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.sev-90 { background: var(--brick-soft); }
+  tbody tr.sev-61 { background: var(--amber-soft); }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.total-cell { font-weight: 700; }
+  .flag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--brick);
+    margin-left: 6px;
+  }
+  tfoot td {
+    padding: 12px 14px;
+    font-weight: 700;
+    border-top: 1px solid var(--hairline);
+    background: var(--ledger-soft);
+  }
+  .empty, .error {
+    padding: 40px;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+  .error { color: var(--brick); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div>
+      <h1>Outstanding Balances</h1>
+      <p class="sub">Live from Buildium</p>
+    </div>
+
+    <div class="summary-figure">
+      <div class="label">Total outstanding</div>
+      <div class="value" id="grand-total">—</div>
+    </div>
+
+    <div class="bucket-list" id="bucket-list"></div>
+
+    <div class="filter-block">
+      <label for="property-filter">Property</label>
+      <select id="property-filter">
+        <option value="">All properties</option>
+      </select>
+    </div>
+
+    <div class="refresh-btn">
+      <button class="ghost" id="refresh">Refresh</button>
+      <div class="as-of" id="as-of"></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="main-head">
+      <h2>Leases with a balance due</h2>
+      <input class="search-box" type="search" id="search" placeholder="Search tenant or unit" />
+    </div>
+    <div id="table-wrap">
+      <div class="empty">Loading…</div>
+    </div>
+  </main>
+</div>
+
+<script>
+const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+let raw = { rows: [], totals: {} };
+let sortKey = "total";
+let sortDir = -1;
+
+async function load(force) {
+  const wrap = document.getElementById("table-wrap");
+  const btn = document.getElementById("refresh");
+  btn.disabled = true;
+  btn.textContent = "Refreshing…";
+  try {
+    const res = await fetch("/api/balances" + (force ? "?refresh=1" : ""));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    raw = data;
+    populateFilter();
+    render();
+    document.getElementById("as-of").textContent =
+      "As of " + new Date(data.generatedAt * 1000).toLocaleString();
+  } catch (e) {
+    wrap.innerHTML = `<div class="error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+  }
+}
+
+function populateFilter() {
+  const sel = document.getElementById("property-filter");
+  const current = sel.value;
+  const props = [...new Set(raw.rows.map(r => r.property))].sort();
+  sel.innerHTML = '<option value="">All properties</option>' +
+    props.map(p => `<option value="${p}">${p}</option>`).join("");
+  sel.value = props.includes(current) ? current : "";
+}
+
+function severity(r) {
+  if (r.bucket_90_plus > 0) return "sev-90";
+  if (r.bucket_61_90 > 0) return "sev-61";
+  return "";
+}
+
+function render() {
+  const propFilter = document.getElementById("property-filter").value;
+  const q = document.getElementById("search").value.trim().toLowerCase();
+
+  let rows = raw.rows.filter(r => r.total !== 0);
+  if (propFilter) rows = rows.filter(r => r.property === propFilter);
+  if (q) rows = rows.filter(r =>
+    r.tenant.toLowerCase().includes(q) || String(r.unit).toLowerCase().includes(q));
+
+  rows = [...rows].sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+
+  const bucketList = document.getElementById("bucket-list");
+  const t = raw.totals || {};
+  bucketList.innerHTML = `
+    <div class="bucket-row"><span class="name">0–30 days</span><span class="amt">${money(t.bucket_0_30||0)}</span></div>
+    <div class="bucket-row"><span class="name">31–60 days</span><span class="amt">${money(t.bucket_31_60||0)}</span></div>
+    <div class="bucket-row"><span class="name">61–90 days</span><span class="amt">${money(t.bucket_61_90||0)}</span></div>
+    <div class="bucket-row"><span class="name">90+ days</span><span class="amt">${money(t.bucket_90_plus||0)}</span></div>
+  `;
+  document.getElementById("grand-total").textContent = money(t.total || 0);
+
+  const wrap = document.getElementById("table-wrap");
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="empty">No outstanding balances match this view.</div>';
+    return;
+  }
+
+  const colTotals = rows.reduce((acc, r) => {
+    acc.b0 += r.bucket_0_30; acc.b31 += r.bucket_31_60;
+    acc.b61 += r.bucket_61_90; acc.b90 += r.bucket_90_plus; acc.total += r.total;
+    return acc;
+  }, {b0:0, b31:0, b61:0, b90:0, total:0});
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th data-key="property">Property</th>
+          <th data-key="unit">Unit</th>
+          <th data-key="tenant">Tenant</th>
+          <th class="num" data-key="bucket_0_30">0–30</th>
+          <th class="num" data-key="bucket_31_60">31–60</th>
+          <th class="num" data-key="bucket_61_90">61–90</th>
+          <th class="num" data-key="bucket_90_plus">90+</th>
+          <th class="num" data-key="total">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr class="${severity(r)}">
+            <td>${r.property}</td>
+            <td>${r.unit}</td>
+            <td>${r.tenant}${r.evictionPending ? '<span class="flag">EVICTION</span>' : (r.noticeGiven ? '<span class="flag">NOTICE</span>' : '')}</td>
+            <td class="num">${money(r.bucket_0_30)}</td>
+            <td class="num">${money(r.bucket_31_60)}</td>
+            <td class="num">${money(r.bucket_61_90)}</td>
+            <td class="num">${money(r.bucket_90_plus)}</td>
+            <td class="num total-cell">${money(r.total)}</td>
+          </tr>`).join("")}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">${rows.length} lease${rows.length === 1 ? "" : "s"}</td>
+          <td class="num">${money(colTotals.b0)}</td>
+          <td class="num">${money(colTotals.b31)}</td>
+          <td class="num">${money(colTotals.b61)}</td>
+          <td class="num">${money(colTotals.b90)}</td>
+          <td class="num">${money(colTotals.total)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  `;
+
+  wrap.querySelectorAll("th[data-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+      render();
+    });
+  });
+}
+
+document.getElementById("property-filter").addEventListener("change", render);
+document.getElementById("search").addEventListener("input", render);
+document.getElementById("refresh").addEventListener("click", () => load(true));
+
+load(false);
+</script>
+</body>
+</html>
