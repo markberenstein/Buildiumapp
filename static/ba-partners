@@ -19,52 +19,68 @@
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--paper); color: var(--ink);
-    font-family: "Inter", -apple-system, sans-serif; padding: 32px 24px 60px;
+    font-family: "Inter", -apple-system, sans-serif;
+    font-feature-settings: "tnum" 1;
+    padding: 32px 20px 60px;
   }
+  .wrap { max-width: 700px; margin: 0 auto; }
   .head {
-    max-width: 900px; margin: 0 auto 28px; display: flex; justify-content: space-between;
-    align-items: baseline; flex-wrap: wrap; gap: 10px;
-    border-bottom: 1px solid var(--hairline); padding-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+    gap: 10px; border-bottom: 1px solid var(--hairline); padding-bottom: 16px; margin-bottom: 8px;
   }
   .head h1 { font-size: 18px; margin: 0; font-weight: 700; }
   .head .note { font-size: 13px; color: var(--ink-soft); }
-  .cards { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-  .card { background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
-  .card img { display: block; width: 100%; height: auto; }
-  .card .meta {
-    padding: 12px 16px; font-size: 13px; color: var(--ink-soft);
-    border-top: 1px solid var(--hairline); display: flex; justify-content: space-between;
-    gap: 12px; flex-wrap: wrap;
-  }
-  .card .caption { color: var(--ink); font-weight: 500; }
-  .empty { max-width: 900px; margin: 60px auto; text-align: center; color: var(--ink-soft); }
+  .as-of { font-size: 12px; color: var(--ink-soft); margin-bottom: 20px; }
+  .total-figure { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; font-size: 13.5px; }
+  thead th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ink-soft); padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  thead th.num, td.num { text-align: right; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  tfoot td { padding: 10px 12px; font-weight: 700; border-top: 1px solid var(--hairline); background: var(--ledger-soft); }
+  .empty { padding: 40px; text-align: center; color: var(--ink-soft); }
 </style>
 </head>
 <body>
+<div class="wrap">
   <div class="head">
     <h1>BA Partners — Balances</h1>
     <span class="note">Rogell Court · Fulton Place</span>
   </div>
-  <div class="cards" id="cards"><div class="empty">Loading…</div></div>
+  <div class="as-of" id="as-of"></div>
+  <div class="total-figure" id="total-figure">—</div>
+  <div id="table-wrap"><div class="empty">Loading…</div></div>
+</div>
 
 <script>
+const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
 async function load() {
-  const res = await fetch("/api/screenshots?portfolio=ba-partners");
+  const res = await fetch("/api/portfolio-balances?portfolio=ba-partners");
   const data = await res.json();
-  const wrap = document.getElementById("cards");
-  if (!data.entries.length) {
-    wrap.innerHTML = '<div class="empty">Nothing posted yet.</div>';
+  const wrap = document.getElementById("table-wrap");
+
+  document.getElementById("total-figure").textContent = money(data.total || 0);
+  document.getElementById("as-of").textContent = data.asOf
+    ? "As of " + new Date(data.asOf * 1000).toLocaleString()
+    : "Nothing posted yet";
+
+  if (!data.rows.length) {
+    wrap.innerHTML = '<div class="empty">No balances posted yet.</div>';
     return;
   }
-  wrap.innerHTML = data.entries.map(e => `
-    <div class="card">
-      <img src="/uploads/${e.filename}" alt="${e.caption || 'Balance screenshot'}" />
-      <div class="meta">
-        <span class="caption">${e.caption || ""}</span>
-        <span>${new Date(e.uploadedAt * 1000).toLocaleString()}</span>
-      </div>
-    </div>
-  `).join("");
+
+  const rows = [...data.rows].sort((a, b) => b.total - a.total);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Lease / tenant</th><th class="num">Balance</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr><td>${r.label || ''}</td><td class="num">${money(r.total)}</td></tr>`).join("")}
+      </tbody>
+      <tfoot><tr><td>${rows.length} lease${rows.length === 1 ? '' : 's'}</td><td class="num">${money(data.total)}</td></tr></tfoot>
+    </table>
+  `;
 }
 load();
 </script>
