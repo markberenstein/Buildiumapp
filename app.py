@@ -57,7 +57,7 @@ PORTFOLIOS = {
     "ford-owed": {
         "label": "Ford Owed",
         "properties": "Church Street",
-        "page": "ford-owed.html",
+        "page": "ford-owned.html",
     },
     "steve-jeanne": {
         "label": "Steve and Jeanne Owned",
@@ -342,7 +342,7 @@ def view_ba_partners():
 
 @app.route("/ford-owed")
 def view_ford_owed():
-    return send_from_directory(app.static_folder, "ford-owed.html")
+    return send_from_directory(app.static_folder, "ford-owned.html")
 
 
 @app.route("/steve-jeanne")
