@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ford Owed — Balances</title>
+<link rel="apple-touch-icon" href="/icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ford Owed">
+<meta name="theme-color" content="#22463C">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F2F1EC; --panel: #FBFAF7; --ink: #1B1F1D; --ink-soft: #5B6158;
+    --ledger: #22463C; --ledger-soft: #E4EBE7; --hairline: #D9D6CC;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Inter", -apple-system, sans-serif;
+    font-feature-settings: "tnum" 1;
+    padding: 32px 20px 60px;
+  }
+  .wrap { max-width: 700px; margin: 0 auto; }
+  .head {
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+    gap: 10px; border-bottom: 1px solid var(--hairline); padding-bottom: 16px; margin-bottom: 8px;
+  }
+  .head h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  .head .note { font-size: 13px; color: var(--ink-soft); }
+  .as-of { font-size: 12px; color: var(--ink-soft); margin-bottom: 20px; }
+  .total-figure { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; font-size: 13.5px; }
+  thead th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ink-soft); padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  thead th.num, td.num { text-align: right; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+  tfoot td { padding: 10px 12px; font-weight: 700; border-top: 1px solid var(--hairline); background: var(--ledger-soft); }
+  .empty { padding: 40px; text-align: center; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>Ford Owed — Balances</h1>
+    <span class="note">Church Street</span>
+  </div>
+  <div class="as-of" id="as-of"></div>
+  <div class="total-figure" id="total-figure">—</div>
+  <div id="table-wrap"><div class="empty">Loading…</div></div>
+</div>
+
+<script>
+const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+async function load() {
+  const res = await fetch("/api/portfolio-balances?portfolio=ford-owed");
+  const data = await res.json();
+  const wrap = document.getElementById("table-wrap");
+
+  document.getElementById("total-figure").textContent = money(data.total || 0);
+  document.getElementById("as-of").textContent = data.asOf
+    ? "As of " + new Date(data.asOf * 1000).toLocaleString()
+    : "Nothing posted yet";
+
+  if (!data.rows.length) {
+    wrap.innerHTML = '<div class="empty">No balances posted yet.</div>';
+    return;
+  }
+
+  const unitNumber = (label) => {
+    const text = label || '';
+    const hash = text.match(/#\s*(\d+)/);
+    if (hash) return parseInt(hash[1], 10);
+    const m = text.match(/\d+/);
+    return m ? parseInt(m[0], 10) : Infinity;
+  };
+  const rows = [...data.rows].sort((a, b) => unitNumber(a.label) - unitNumber(b.label));
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Lease / tenant</th><th class="num">Balance</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr><td>${r.label || ''}</td><td class="num">${money(r.total)}</td></tr>`).join("")}
+      </tbody>
+      <tfoot><tr><td>${rows.length} lease${rows.length === 1 ? '' : 's'}</td><td class="num">${money(data.total)}</td></tr></tfoot>
+    </table>
+  `;
+}
+load();
+</script>
+</body>
+</html>
