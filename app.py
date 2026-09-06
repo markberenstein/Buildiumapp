@@ -353,7 +353,7 @@ def view_steve_jeanne():
 
 @app.route("/berenstein-associates")
 def view_berenstein():
-    return send_from_directory(app.static_folder, "berenstein.html")
+    return send_from_directory(app.static_folder, "berenstein-associates.html")
 
 
 @app.route("/api/portfolios")
