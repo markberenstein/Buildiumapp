@@ -70,8 +70,16 @@ async function load() {
     wrap.innerHTML = '<div class="empty">No balances posted yet.</div>';
     return;
   }
+  const unitNumber = (label) => {
+    const text = label || '';
+    const hash = text.match(/#\s*(\d+)/);
+    if (hash) return parseInt(hash[1], 10);
+    const m = text.match(/\d+/);
+    return m ? parseInt(m[0], 10) : Infinity;
+  };
+  const rows = [...data.rows].sort((a, b) => unitNumber(a.label) - unitNumber(b.label));
 
-    const rows = [...data.rows].sort((a, b) => a.total - b.total);
+    
 
   wrap.innerHTML = `
     <table>
