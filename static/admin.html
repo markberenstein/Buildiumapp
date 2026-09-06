@@ -4,11 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Admin — Outstanding Balances</title>
- <link rel="apple-touch-icon" href="/icon.png">
+<link rel="apple-touch-icon" href="/icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Balances Admin">
-<meta name="theme-color" content="#22463C"> 
+<meta name="theme-color" content="#22463C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -25,9 +25,9 @@
   .panel { width: 100%; max-width: 480px; }
   h1 { font-size: 18px; margin: 0 0 24px; }
   label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
-  input[type="password"], input[type="text"], input[type="file"] {
+  input[type="password"], input[type="text"], input[type="file"], select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--hairline);
-    border-radius: 6px; background: var(--panel); font: inherit; font-size: 14px;
+    border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px;
     margin-bottom: 16px;
   }
   button {
@@ -37,6 +37,8 @@
   button.secondary { background: transparent; color: var(--brick); border: 1px solid var(--brick); }
   .error { color: var(--brick); font-size: 13px; margin: -8px 0 16px; }
   .row { display: flex; gap: 10px; align-items: center; }
+  .app-links { display: flex; flex-direction: column; gap: 4px; margin: 0 0 20px; font-size: 13px; }
+  .app-links a { color: var(--ledger); }
   ul#list { list-style: none; padding: 0; margin: 24px 0 0; }
   ul#list li {
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -44,8 +46,11 @@
   }
   ul#list img { width: 56px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--hairline); }
   .thumb-row { display: flex; align-items: center; gap: 10px; }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 600; color: var(--ledger);
+    background: var(--ledger-soft); padding: 2px 7px; border-radius: 4px; margin-right: 6px;
+  }
   .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-  a.view-link { font-size: 13px; color: var(--ledger); }
 </style>
 </head>
 <body>
@@ -61,16 +66,24 @@
   <div id="admin-view" style="display:none">
     <div class="top">
       <h1>Post a balance screenshot</h1>
-      <a class="view-link" href="/" target="_blank">View public page →</a>
+      <button class="secondary" id="logout-btn">Log out</button>
     </div>
+
+    <div class="app-links">
+      <a href="/ba-partners" target="_blank">View BA Partners app →</a>
+      <a href="/ford-managed" target="_blank">View Ford Managed app →</a>
+      <a href="/berenstein" target="_blank">View Berenstein Associates app →</a>
+    </div>
+
     <div class="error" id="upload-error" style="display:none"></div>
+    <label for="portfolio">Portfolio</label>
+    <select id="portfolio"></select>
     <label for="file">Screenshot</label>
     <input type="file" id="file" accept="image/*" />
     <label for="caption">Caption (optional — e.g. "As of 9/6, AR Aging report")</label>
     <input type="text" id="caption" placeholder="As of ..." />
     <div class="row">
       <button id="upload-btn">Post</button>
-      <button class="secondary" id="logout-btn">Log out</button>
     </div>
 
     <ul id="list"></ul>
@@ -78,6 +91,17 @@
 </div>
 
 <script>
+let PORTFOLIOS = {};
+
+async function loadPortfolios() {
+  const res = await fetch("/api/portfolios");
+  PORTFOLIOS = await res.json();
+  const sel = document.getElementById("portfolio");
+  sel.innerHTML = Object.entries(PORTFOLIOS).map(([key, p]) =>
+    `<option value="${key}">${p.label} — ${p.properties}</option>`
+  ).join("");
+}
+
 async function checkStatus() {
   const res = await fetch("/admin/status");
   const data = await res.json();
@@ -89,9 +113,10 @@ function showLogin() {
   document.getElementById("admin-view").style.display = "none";
 }
 
-function showAdmin() {
+async function showAdmin() {
   document.getElementById("login-view").style.display = "none";
   document.getElementById("admin-view").style.display = "block";
+  await loadPortfolios();
   refreshList();
 }
 
@@ -116,12 +141,14 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 document.getElementById("upload-btn").addEventListener("click", async () => {
   const fileInput = document.getElementById("file");
   const caption = document.getElementById("caption").value;
+  const portfolio = document.getElementById("portfolio").value;
   const err = document.getElementById("upload-error");
   if (!fileInput.files.length) { err.textContent = "Choose an image first."; err.style.display = "block"; return; }
 
   const fd = new FormData();
   fd.append("file", fileInput.files[0]);
   fd.append("caption", caption);
+  fd.append("portfolio", portfolio);
 
   const res = await fetch("/admin/upload", { method: "POST", body: fd });
   const data = await res.json();
@@ -142,15 +169,19 @@ function renderList(entries) {
   const list = document.getElementById("list");
   entries = [...entries].sort((a, b) => b.uploadedAt - a.uploadedAt);
   if (!entries.length) { list.innerHTML = "<li>Nothing posted yet.</li>"; return; }
-  list.innerHTML = entries.map(e => `
+  list.innerHTML = entries.map(e => {
+    const p = PORTFOLIOS[e.portfolio];
+    const tag = p ? `<span class="tag">${p.label}</span>` : "";
+    return `
     <li>
       <span class="thumb-row">
         <img src="/uploads/${e.filename}" />
-        <span>${e.caption || "(no caption)"}<br><small>${new Date(e.uploadedAt * 1000).toLocaleString()}</small></span>
+        <span>${tag}${e.caption || "(no caption)"}<br><small>${new Date(e.uploadedAt * 1000).toLocaleString()}</small></span>
       </span>
       <button class="secondary" data-id="${e.id}">Remove</button>
     </li>
-  `).join("");
+  `;
+  }).join("");
   list.querySelectorAll("button[data-id]").forEach(btn => {
     btn.addEventListener("click", async () => {
       await fetch(`/admin/delete/${btn.dataset.id}`, { method: "POST" });
