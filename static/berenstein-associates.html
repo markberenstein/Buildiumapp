@@ -57,7 +57,7 @@
 const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 async function load() {
-  const res = await fetch("/api/portfolio-balances?portfolio=berenstein");
+  const res = await fetch("/api/portfolio-balances?portfolio=berenstein-associates");
   const data = await res.json();
   const wrap = document.getElementById("table-wrap");
 
