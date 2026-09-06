@@ -14,18 +14,18 @@
 <style>
   :root {
     --paper: #F2F1EC; --panel: #FBFAF7; --ink: #1B1F1D; --ink-soft: #5B6158;
-    --ledger: #22463C; --ledger-soft: #E4EBE7; --brick: #A63D2F; --hairline: #D9D6CC;
+    --ledger: #22463C; --ledger-soft: #E4EBE7; --brick: #A63D2F; --brick-soft: #F5E4E0; --hairline: #D9D6CC;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--paper); color: var(--ink);
     font-family: "Inter", -apple-system, sans-serif;
-    display: flex; justify-content: center; padding: 60px 20px;
+    padding: 40px 16px 60px;
   }
-  .panel { width: 100%; max-width: 480px; }
+  .panel { width: 100%; max-width: 640px; margin: 0 auto; }
   h1 { font-size: 18px; margin: 0 0 24px; }
   label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
-  input[type="password"], input[type="text"], input[type="file"], select {
+  input[type="password"], input[type="text"], input[type="file"], input[type="number"], select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--hairline);
     border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px;
     margin-bottom: 16px;
@@ -34,23 +34,28 @@
     padding: 10px 16px; background: var(--ledger); color: #fff; border: none;
     border-radius: 6px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   }
+  button:disabled { opacity: 0.5; cursor: default; }
   button.secondary { background: transparent; color: var(--brick); border: 1px solid var(--brick); }
+  button.ghost { background: transparent; color: var(--ledger); border: 1px solid var(--ledger); }
   .error { color: var(--brick); font-size: 13px; margin: -8px 0 16px; }
+  .note { font-size: 13px; color: var(--ink-soft); margin: -8px 0 16px; }
   .row { display: flex; gap: 10px; align-items: center; }
   .app-links { display: flex; flex-direction: column; gap: 4px; margin: 0 0 20px; font-size: 13px; }
   .app-links a { color: var(--ledger); }
-  ul#list { list-style: none; padding: 0; margin: 24px 0 0; }
-  ul#list li {
-    display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    padding: 10px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px;
-  }
-  ul#list img { width: 56px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--hairline); }
-  .thumb-row { display: flex; align-items: center; gap: 10px; }
-  .tag {
-    display: inline-block; font-size: 11px; font-weight: 600; color: var(--ledger);
-    background: var(--ledger-soft); padding: 2px 7px; border-radius: 4px; margin-right: 6px;
-  }
   .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+
+  table.review { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  table.review th {
+    text-align: left; font-weight: 600; color: var(--ink-soft); font-size: 11.5px;
+    padding: 6px 6px; border-bottom: 1px solid var(--hairline);
+  }
+  table.review td { padding: 6px 6px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  table.review tr.flagged { background: var(--brick-soft); }
+  table.review input { margin: 0; padding: 6px 8px; font-size: 13px; }
+  table.review input.total-input { width: 100px; }
+  table.review select.portfolio-select { padding: 6px 4px; font-size: 12px; }
+  .flag-note { font-size: 11px; color: var(--brick); margin-top: 2px; }
+  .remove-row { background: none; border: none; color: var(--brick); font-size: 16px; cursor: pointer; padding: 0 6px; }
 </style>
 </head>
 <body>
@@ -65,7 +70,7 @@
 
   <div id="admin-view" style="display:none">
     <div class="top">
-      <h1>Post a balance screenshot</h1>
+      <h1>Post outstanding balances</h1>
       <button class="secondary" id="logout-btn">Log out</button>
     </div>
 
@@ -75,31 +80,41 @@
       <a href="/berenstein" target="_blank">View Berenstein Associates app →</a>
     </div>
 
-    <div class="error" id="upload-error" style="display:none"></div>
-    <label for="portfolio">Portfolio</label>
-    <select id="portfolio"></select>
-    <label for="file">Screenshot</label>
-    <input type="file" id="file" accept="image/*" />
-    <label for="caption">Caption (optional — e.g. "As of 9/6, AR Aging report")</label>
-    <input type="text" id="caption" placeholder="As of ..." />
-    <div class="row">
-      <button id="upload-btn">Post</button>
+    <!-- Step 1: upload -->
+    <div id="upload-step">
+      <div class="error" id="upload-error" style="display:none"></div>
+      <label for="file">Full outstanding-balances screenshot</label>
+      <input type="file" id="file" accept="image/*" />
+      <button id="parse-btn">Read screenshot</button>
     </div>
 
-    <ul id="list"></ul>
+    <!-- Step 2: review -->
+    <div id="review-step" style="display:none">
+      <p class="note" id="review-note"></p>
+      <div class="error" id="publish-error" style="display:none"></div>
+      <table class="review">
+        <thead>
+          <tr><th>Lease / tenant</th><th>Portfolio</th><th>Balance</th><th></th></tr>
+        </thead>
+        <tbody id="review-body"></tbody>
+      </table>
+      <div class="row">
+        <button class="ghost" id="add-row-btn">+ Add row</button>
+        <button id="publish-btn">Publish</button>
+        <button class="secondary" id="cancel-btn">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
 let PORTFOLIOS = {};
+let currentRows = [];
+let currentSourceImage = null;
 
 async function loadPortfolios() {
   const res = await fetch("/api/portfolios");
   PORTFOLIOS = await res.json();
-  const sel = document.getElementById("portfolio");
-  sel.innerHTML = Object.entries(PORTFOLIOS).map(([key, p]) =>
-    `<option value="${key}">${p.label} — ${p.properties}</option>`
-  ).join("");
 }
 
 async function checkStatus() {
@@ -117,7 +132,6 @@ async function showAdmin() {
   document.getElementById("login-view").style.display = "none";
   document.getElementById("admin-view").style.display = "block";
   await loadPortfolios();
-  refreshList();
 }
 
 document.getElementById("login-btn").addEventListener("click", async () => {
@@ -138,57 +152,114 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   showLogin();
 });
 
-document.getElementById("upload-btn").addEventListener("click", async () => {
+document.getElementById("parse-btn").addEventListener("click", async () => {
   const fileInput = document.getElementById("file");
-  const caption = document.getElementById("caption").value;
-  const portfolio = document.getElementById("portfolio").value;
   const err = document.getElementById("upload-error");
-  if (!fileInput.files.length) { err.textContent = "Choose an image first."; err.style.display = "block"; return; }
+  const btn = document.getElementById("parse-btn");
+  if (!fileInput.files.length) { err.textContent = "Choose a screenshot first."; err.style.display = "block"; return; }
 
+  btn.disabled = true; btn.textContent = "Reading…";
   const fd = new FormData();
   fd.append("file", fileInput.files[0]);
-  fd.append("caption", caption);
-  fd.append("portfolio", portfolio);
 
-  const res = await fetch("/admin/upload", { method: "POST", body: fd });
-  const data = await res.json();
-  if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
-  err.style.display = "none";
-  fileInput.value = "";
-  document.getElementById("caption").value = "";
-  renderList(data.entries);
+  try {
+    const res = await fetch("/admin/parse", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
+    err.style.display = "none";
+    currentRows = data.rows;
+    currentSourceImage = data.sourceImage;
+    renderReview();
+    document.getElementById("upload-step").style.display = "none";
+    document.getElementById("review-step").style.display = "block";
+  } finally {
+    btn.disabled = false; btn.textContent = "Read screenshot";
+  }
 });
 
-async function refreshList() {
-  const res = await fetch("/api/screenshots");
-  const data = await res.json();
-  renderList(data.entries);
-}
+function renderReview() {
+  const flagged = currentRows.filter(r => r.needsReview).length;
+  document.getElementById("review-note").textContent =
+    `${currentRows.length} rows read` +
+    (flagged ? ` — ${flagged} need a manual check (highlighted below).` : " — all balances read cleanly.") +
+    " Check each row before publishing.";
 
-function renderList(entries) {
-  const list = document.getElementById("list");
-  entries = [...entries].sort((a, b) => b.uploadedAt - a.uploadedAt);
-  if (!entries.length) { list.innerHTML = "<li>Nothing posted yet.</li>"; return; }
-  list.innerHTML = entries.map(e => {
-    const p = PORTFOLIOS[e.portfolio];
-    const tag = p ? `<span class="tag">${p.label}</span>` : "";
-    return `
-    <li>
-      <span class="thumb-row">
-        <img src="/uploads/${e.filename}" />
-        <span>${tag}${e.caption || "(no caption)"}<br><small>${new Date(e.uploadedAt * 1000).toLocaleString()}</small></span>
-      </span>
-      <button class="secondary" data-id="${e.id}">Remove</button>
-    </li>
-  `;
-  }).join("");
-  list.querySelectorAll("button[data-id]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      await fetch(`/admin/delete/${btn.dataset.id}`, { method: "POST" });
-      refreshList();
+  const body = document.getElementById("review-body");
+  body.innerHTML = currentRows.map(r => `
+    <tr class="${r.needsReview ? 'flagged' : ''}" data-id="${r.id}">
+      <td>
+        <input type="text" class="label-input" value="${(r.label || '').replace(/"/g, '&quot;')}" />
+        ${r.needsReview ? '<div class="flag-note">Could not read a clean balance — check the screenshot</div>' : ''}
+      </td>
+      <td>
+        <select class="portfolio-select">
+          ${Object.entries(PORTFOLIOS).map(([key, p]) =>
+            `<option value="${key}" ${r.portfolio === key ? 'selected' : ''}>${p.label}</option>`
+          ).join("")}
+        </select>
+      </td>
+      <td><input type="number" step="0.01" class="total-input" value="${r.total ?? ''}" /></td>
+      <td><button class="remove-row" data-id="${r.id}">✕</button></td>
+    </tr>
+  `).join("");
+
+  body.querySelectorAll(".remove-row").forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentRows = currentRows.filter(r => r.id !== btn.dataset.id);
+      renderReview();
     });
   });
 }
+
+document.getElementById("add-row-btn").addEventListener("click", () => {
+  currentRows.push({
+    id: "new-" + Math.random().toString(36).slice(2),
+    label: "", leaseId: null, total: null,
+    portfolio: Object.keys(PORTFOLIOS)[0], needsReview: false,
+  });
+  renderReview();
+});
+
+document.getElementById("cancel-btn").addEventListener("click", () => {
+  currentRows = []; currentSourceImage = null;
+  document.getElementById("file").value = "";
+  document.getElementById("review-step").style.display = "none";
+  document.getElementById("upload-step").style.display = "block";
+});
+
+document.getElementById("publish-btn").addEventListener("click", async () => {
+  const err = document.getElementById("publish-error");
+  const btn = document.getElementById("publish-btn");
+
+  // Pull current edited values out of the DOM into currentRows
+  const trs = document.querySelectorAll("#review-body tr");
+  const edited = [];
+  trs.forEach(tr => {
+    const id = tr.dataset.id;
+    const label = tr.querySelector(".label-input").value;
+    const portfolio = tr.querySelector(".portfolio-select").value;
+    const total = tr.querySelector(".total-input").value;
+    edited.push({ id, label, portfolio, total });
+  });
+
+  btn.disabled = true; btn.textContent = "Publishing…";
+  try {
+    const res = await fetch("/admin/publish", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ rows: edited, sourceImage: currentSourceImage }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
+    err.style.display = "none";
+    currentRows = []; currentSourceImage = null;
+    document.getElementById("file").value = "";
+    document.getElementById("review-step").style.display = "none";
+    document.getElementById("upload-step").style.display = "block";
+    alert("Published. All three apps are now showing this data.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Publish";
+  }
+});
 
 checkStatus();
 </script>
