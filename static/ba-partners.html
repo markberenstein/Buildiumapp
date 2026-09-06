@@ -71,7 +71,8 @@ async function load() {
     return;
   }
 
-  const rows = [...data.rows].sort((a, b) => b.total - a.total);
+    const rows = [...data.rows].sort((a, b) => a.total - b.total);
+
   wrap.innerHTML = `
     <table>
       <thead><tr><th>Lease / tenant</th><th class="num">Balance</th></tr></thead>
