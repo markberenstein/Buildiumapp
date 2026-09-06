@@ -44,6 +44,30 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(MANIFEST_PATH), exist_ok=True)
 
+# Property portfolios — each gets its own installable app / URL.
+PORTFOLIOS = {
+    "ba-partners": {
+        "label": "BA Partners",
+        "properties": "Rogell Court, Fulton Place",
+        "page": "ba-partners.html",
+    },
+    "ford-managed": {
+        "label": "Ford Managed",
+        "properties": "Church Street, Pierce Street, Broderick",
+        "page": "ford-managed.html",
+    },
+    "berenstein": {
+        "label": "Berenstein Associates",
+        "properties": "Teagarden",
+        "page": "berenstein.html",
+    },
+}
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(os.path.dirname(__file__), "uploads"))
+MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "data", "manifest.json")
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.dirname(MANIFEST_PATH), exist_ok=True)
+
 
 def load_manifest():
     if not os.path.exists(MANIFEST_PATH):
