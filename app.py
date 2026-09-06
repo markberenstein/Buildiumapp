@@ -54,23 +54,33 @@ PORTFOLIOS = {
         "properties": "Rogell Court, Fulton Place",
         "page": "ba-partners.html",
     },
-    "ford-managed": {
-        "label": "Ford Managed",
-        "properties": "Church Street, Pierce Street, Broderick",
-        "page": "ford-managed.html",
+    "ford-owed": {
+        "label": "Ford Owed",
+        "properties": "Church Street",
+        "page": "ford-owed.html",
     },
-    "berenstein": {
+    "steve-jeanne": {
+        "label": "Steve and Jeanne Owned",
+        "properties": "Pierce Street, Broderick",
+        "page": "steve-jeanne.html",
+    },
+     "berenstein-associates": {
         "label": "Berenstein Associates",
         "properties": "Teagarden",
-        "page": "berenstein.html",
+        "page": "berenstein-associates.html",
     },
+
+    
 }
 
 # Keyword -> portfolio mapping, used to auto-assign each parsed row.
 PORTFOLIO_KEYWORDS = {
     "ba-partners": ["rogell", "fulton"],
-    "ford-managed": ["church", "pierce", "broderick"],
-    "berenstein": ["teagarden"],
+   "ford-owed": ["church"],
+    "steve-jeanne": ["pierce", "broderick"],
+
+    "berenstein-associates": ["teagarden"],
+
 }
 
 BALANCES_PATH = os.path.join(os.path.dirname(__file__), "data", "balances.json")
@@ -330,13 +340,18 @@ def api_screenshots():
 def view_ba_partners():
     return send_from_directory(app.static_folder, "ba-partners.html")
 
+@app.route("/ford-owed")
+def view_ford_owed():
+    return send_from_directory(app.static_folder, "ford-owed.html")
 
-@app.route("/ford-managed")
-def view_ford_managed():
-    return send_from_directory(app.static_folder, "ford-managed.html")
+
+@app.route("/steve-jeanne")
+def view_steve_jeanne():
+    return send_from_directory(app.static_folder, "steve-jeanne.html")
 
 
-@app.route("/berenstein")
+
+@app.route("/berenstein-associates")
 def view_berenstein():
     return send_from_directory(app.static_folder, "berenstein.html")
 
