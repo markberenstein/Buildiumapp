@@ -78,7 +78,8 @@ async function load() {
     const m = text.match(/\d+/);
     return m ? parseInt(m[0], 10) : Infinity;
   };
-  
+    const rows = [...data.rows].sort((a, b) => unitNumber(a.label) - unitNumber(b.label));
+
   
 
   wrap.innerHTML = `
