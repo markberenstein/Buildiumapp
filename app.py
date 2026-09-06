@@ -408,4 +408,5 @@ def admin_publish():
     rows = body.get("rows")
     source_image = body.get("sourceImage")
     if not isinstance(rows, list):
-        return jsonify({"error": "
+      return jsonify({"error": "Missing rows"}), 400
+
