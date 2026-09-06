@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Admin — Outstanding Balances</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F2F1EC; --panel: #FBFAF7; --ink: #1B1F1D; --ink-soft: #5B6158;
+    --ledger: #22463C; --ledger-soft: #E4EBE7; --brick: #A63D2F; --hairline: #D9D6CC;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Inter", -apple-system, sans-serif;
+    display: flex; justify-content: center; padding: 60px 20px;
+  }
+  .panel { width: 100%; max-width: 480px; }
+  h1 { font-size: 18px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+  input[type="password"], input[type="text"], input[type="file"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--hairline);
+    border-radius: 6px; background: var(--panel); font: inherit; font-size: 14px;
+    margin-bottom: 16px;
+  }
+  button {
+    padding: 10px 16px; background: var(--ledger); color: #fff; border: none;
+    border-radius: 6px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--brick); border: 1px solid var(--brick); }
+  .error { color: var(--brick); font-size: 13px; margin: -8px 0 16px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  ul#list { list-style: none; padding: 0; margin: 24px 0 0; }
+  ul#list li {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px;
+  }
+  ul#list img { width: 56px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--hairline); }
+  .thumb-row { display: flex; align-items: center; gap: 10px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  a.view-link { font-size: 13px; color: var(--ledger); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div id="login-view">
+    <h1>Admin login</h1>
+    <div class="error" id="login-error" style="display:none"></div>
+    <label for="password">Password</label>
+    <input type="password" id="password" />
+    <button id="login-btn">Log in</button>
+  </div>
+
+  <div id="admin-view" style="display:none">
+    <div class="top">
+      <h1>Post a balance screenshot</h1>
+      <a class="view-link" href="/" target="_blank">View public page →</a>
+    </div>
+    <div class="error" id="upload-error" style="display:none"></div>
+    <label for="file">Screenshot</label>
+    <input type="file" id="file" accept="image/*" />
+    <label for="caption">Caption (optional — e.g. "As of 9/6, AR Aging report")</label>
+    <input type="text" id="caption" placeholder="As of ..." />
+    <div class="row">
+      <button id="upload-btn">Post</button>
+      <button class="secondary" id="logout-btn">Log out</button>
+    </div>
+
+    <ul id="list"></ul>
+  </div>
+</div>
+
+<script>
+async function checkStatus() {
+  const res = await fetch("/admin/status");
+  const data = await res.json();
+  if (data.loggedIn) showAdmin(); else showLogin();
+}
+
+function showLogin() {
+  document.getElementById("login-view").style.display = "block";
+  document.getElementById("admin-view").style.display = "none";
+}
+
+function showAdmin() {
+  document.getElementById("login-view").style.display = "none";
+  document.getElementById("admin-view").style.display = "block";
+  refreshList();
+}
+
+document.getElementById("login-btn").addEventListener("click", async () => {
+  const password = document.getElementById("password").value;
+  const res = await fetch("/admin/login", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json();
+  const err = document.getElementById("login-error");
+  if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
+  err.style.display = "none";
+  showAdmin();
+});
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  await fetch("/admin/logout", { method: "POST" });
+  showLogin();
+});
+
+document.getElementById("upload-btn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("file");
+  const caption = document.getElementById("caption").value;
+  const err = document.getElementById("upload-error");
+  if (!fileInput.files.length) { err.textContent = "Choose an image first."; err.style.display = "block"; return; }
+
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  fd.append("caption", caption);
+
+  const res = await fetch("/admin/upload", { method: "POST", body: fd });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
+  err.style.display = "none";
+  fileInput.value = "";
+  document.getElementById("caption").value = "";
+  renderList(data.entries);
+});
+
+async function refreshList() {
+  const res = await fetch("/api/screenshots");
+  const data = await res.json();
+  renderList(data.entries);
+}
+
+function renderList(entries) {
+  const list = document.getElementById("list");
+  entries = [...entries].sort((a, b) => b.uploadedAt - a.uploadedAt);
+  if (!entries.length) { list.innerHTML = "<li>Nothing posted yet.</li>"; return; }
+  list.innerHTML = entries.map(e => `
+    <li>
+      <span class="thumb-row">
+        <img src="/uploads/${e.filename}" />
+        <span>${e.caption || "(no caption)"}<br><small>${new Date(e.uploadedAt * 1000).toLocaleString()}</small></span>
+      </span>
+      <button class="secondary" data-id="${e.id}">Remove</button>
+    </li>
+  `).join("");
+  list.querySelectorAll("button[data-id]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/admin/delete/${btn.dataset.id}`, { method: "POST" });
+      refreshList();
+    });
+  });
+}
+
+checkStatus();
+</script>
+</body>
+</html>
