@@ -42,6 +42,18 @@
   .row { display: flex; gap: 10px; align-items: center; }
   .app-links { display: flex; flex-direction: column; gap: 4px; margin: 0 0 20px; font-size: 13px; }
   .app-links a { color: var(--ledger); }
+  .source-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  button.tab-btn {
+    flex: 1; padding: 8px 10px; background: var(--panel); border: 1px solid var(--hairline);
+    border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    cursor: pointer;
+  }
+  button.tab-btn.active { background: var(--ledger); color: #fff; border-color: var(--ledger); }
+  textarea#paste-text {
+    width: 100%; min-height: 160px; padding: 10px 12px; box-sizing: border-box;
+    border: 1px solid var(--hairline); border-radius: 6px; font: inherit; font-size: 13px;
+    background: var(--panel); color: var(--ink); margin-bottom: 12px;
+  }
   .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 
   table.review { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
@@ -85,10 +97,24 @@
 
     <!-- Step 1: upload -->
     <div id="upload-step">
+      <div class="source-tabs">
+        <button type="button" class="tab-btn active" id="tab-photo">Upload screenshot</button>
+        <button type="button" class="tab-btn" id="tab-paste">Paste text</button>
+      </div>
+
       <div class="error" id="upload-error" style="display:none"></div>
-      <label for="file">Full outstanding-balances screenshot</label>
-      <input type="file" id="file" accept="image/*" />
-      <button id="parse-btn">Read screenshot</button>
+
+      <div id="photo-source">
+        <label for="file">Full outstanding-balances screenshot</label>
+        <input type="file" id="file" accept="image/*" />
+        <button id="parse-btn">Read screenshot</button>
+      </div>
+
+      <div id="paste-source" style="display:none">
+        <label for="paste-text">Paste the table copied from Buildium's page</label>
+        <textarea id="paste-text" placeholder="Select the table on Buildium's outstanding balances page, copy, then paste it here"></textarea>
+        <button id="parse-paste-btn">Parse pasted text</button>
+      </div>
     </div>
 
     <!-- Step 2: review -->
@@ -154,6 +180,47 @@ document.getElementById("login-btn").addEventListener("click", async () => {
 document.getElementById("logout-btn").addEventListener("click", async () => {
   await fetch("/admin/logout", { method: "POST" });
   showLogin();
+});
+
+document.getElementById("tab-photo").addEventListener("click", () => {
+  document.getElementById("tab-photo").classList.add("active");
+  document.getElementById("tab-paste").classList.remove("active");
+  document.getElementById("photo-source").style.display = "block";
+  document.getElementById("paste-source").style.display = "none";
+  document.getElementById("upload-error").style.display = "none";
+});
+
+document.getElementById("tab-paste").addEventListener("click", () => {
+  document.getElementById("tab-paste").classList.add("active");
+  document.getElementById("tab-photo").classList.remove("active");
+  document.getElementById("paste-source").style.display = "block";
+  document.getElementById("photo-source").style.display = "none";
+  document.getElementById("upload-error").style.display = "none";
+});
+
+document.getElementById("parse-paste-btn").addEventListener("click", async () => {
+  const text = document.getElementById("paste-text").value;
+  const err = document.getElementById("upload-error");
+  const btn = document.getElementById("parse-paste-btn");
+  if (!text.trim()) { err.textContent = "Paste the table text first."; err.style.display = "block"; return; }
+
+  btn.disabled = true; btn.textContent = "Reading…";
+  try {
+    const res = await fetch("/admin/parse-text", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error; err.style.display = "block"; return; }
+    err.style.display = "none";
+    currentRows = data.rows;
+    currentSourceImage = data.sourceImage;
+    renderReview();
+    document.getElementById("upload-step").style.display = "none";
+    document.getElementById("review-step").style.display = "block";
+  } finally {
+    btn.disabled = false; btn.textContent = "Parse pasted text";
+  }
 });
 
 document.getElementById("parse-btn").addEventListener("click", async () => {
@@ -229,6 +296,7 @@ document.getElementById("add-row-btn").addEventListener("click", () => {
 document.getElementById("cancel-btn").addEventListener("click", () => {
   currentRows = []; currentSourceImage = null;
   document.getElementById("file").value = "";
+  document.getElementById("paste-text").value = "";
   document.getElementById("review-step").style.display = "none";
   document.getElementById("upload-step").style.display = "block";
 });
@@ -262,6 +330,7 @@ document.getElementById("publish-btn").addEventListener("click", async () => {
     err.style.display = "none";
     currentRows = []; currentSourceImage = null;
     document.getElementById("file").value = "";
+  document.getElementById("paste-text").value = "";
     document.getElementById("review-step").style.display = "none";
     document.getElementById("upload-step").style.display = "block";
     alert("Published. All four apps are now showing this data.");
