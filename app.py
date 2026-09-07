@@ -80,12 +80,10 @@ PORTFOLIOS = {
 
 # Keyword -> portfolio mapping, used to auto-assign each parsed row.
 PORTFOLIO_KEYWORDS = {
-    "ba-partners": ["rogell", "fulton"],
-   "ford-owed": ["church"],
-    "steve-jeanne": ["pierce", "broderick"],
-
+    "ba-partners": ["rogell court", "fulton place"],
+    "ford-owed": ["church street"],
+    "steve-jeanne": ["pierce street", "broderick"],
     "berenstein-associates": ["teagarden"],
-
 }
 
 BALANCES_PATH = os.path.join(os.path.dirname(__file__), "data", "balances.json")
@@ -98,6 +96,39 @@ def portfolio_for_text(text):
             if kw in low:
                 return portfolio
     return None
+
+
+def clean_lease_label(rest):
+    """
+    Turn the raw OCR leftover text for one lease (after the property name
+    has already been stripped off) into a plain "Unit: Tenant Name" label.
+    Prefers "Apartment #N" when present, otherwise falls back to whatever
+    bare unit number(s) appear right after the property name.
+    """
+    unit_label = None
+    apt_match = re.search(r'apartment\s*#?\s*(\d+)', rest, re.IGNORECASE)
+    if apt_match:
+        unit_label = f"Apartment #{apt_match.group(1)}"
+        rest = rest[:apt_match.start()] + rest[apt_match.end():]
+    else:
+        num_match = re.match(r'\s*[-–—.]*\s*(\d+(?:\s*/\s*\d+)*)', rest)
+        if num_match and num_match.group(1):
+            unit_label = re.sub(r'\s*/\s*', '/', num_match.group(1))
+            rest = rest[num_match.end():]
+
+    tenant = rest
+    tenant = tenant.replace('$', ' ')
+    tenant = re.sub(r'[~\-_—–|()+»]', ' ', tenant)
+    tenant = re.sub(r'\b\d{3,}\b', ' ', tenant)
+    tenant = re.sub(r'\b\d{1,2}\b', ' ', tenant)
+    tenant = re.sub(r'\.(?!\w)', ' ', tenant)
+    tenant = re.sub(r',{2,}', ',', tenant)
+    tenant = re.sub(r'\s*,\s*', ', ', tenant)
+    tenant = re.sub(r'\s+', ' ', tenant).strip(' .,')
+
+    if unit_label:
+        return f"{unit_label}: {tenant}"
+    return tenant
 
 
 def parse_balances_screenshot(image_path):
@@ -114,7 +145,8 @@ def parse_balances_screenshot(image_path):
     text = pytesseract.image_to_string(img)
 
     all_keywords = [kw for kws in PORTFOLIO_KEYWORDS.values() for kw in kws]
-    pattern = re.compile(r'(' + '|'.join(all_keywords) + r')', re.IGNORECASE)
+    all_keywords_sorted = sorted(all_keywords, key=len, reverse=True)
+    pattern = re.compile(r'(' + '|'.join(re.escape(kw) for kw in all_keywords_sorted) + r')', re.IGNORECASE)
     starts = list(pattern.finditer(text))
 
     rows = []
@@ -136,18 +168,17 @@ def parse_balances_screenshot(image_path):
         amounts = [float(d.replace(',', '')) for d in dollar_matches]
         total = max(amounts) if amounts else None
 
-        clean = window
-        clean = re.sub(r'\$[\d,]+\.\d{2}', '', clean)
+        rest = window[m.end() - row_start:]
+        rest = re.sub(r'\$[\d,]+\.\d{2}', '', rest)
         if lease_id:
-            clean = clean.replace(lease_id, '')
-        clean = re.sub(r'[~\-_+|]', ' ', clean)
-        clean = re.sub(r'\s+', ' ', clean).strip()
+            rest = rest.replace(lease_id, '')
 
+        label = clean_lease_label(rest)
         portfolio = portfolio_for_text(window)
         rows.append(
             {
                 "id": uuid.uuid4().hex,
-                "label": clean,
+                "label": label,
                 "leaseId": lease_id,
                 "total": total,
                 "portfolio": portfolio,
@@ -474,7 +505,6 @@ def api_portfolio_balances():
     })
         
 
-
 @app.route("/admin/upload", methods=["POST"])
 @require_admin
 def admin_upload():
@@ -524,4 +554,3 @@ def admin_delete(entry_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("DEBUG") == "1")
-
