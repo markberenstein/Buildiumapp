@@ -245,8 +245,9 @@ document.getElementById("publish-btn").addEventListener("click", async () => {
     const label = tr.querySelector(".label-input").value;
     const portfolio = tr.querySelector(".portfolio-select").value;
     const total = tr.querySelector(".total-input").value;
-    edited.push({ id, label, portfolio, total });
-  });
+     const notes = tr.querySelector(".notes-input").value;
+    edited.push({ id, label, portfolio, total, notes });
+   
 
   btn.disabled = true; btn.textContent = "Publishing…";
   try {
