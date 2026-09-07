@@ -551,6 +551,26 @@ def admin_parse():
     return jsonify({"ok": True, "sourceImage": filename, "rows": rows})
 
 
+@app.route("/admin/parse-text", methods=["POST"])
+@require_admin
+def admin_parse_text():
+    body = request.get_json(silent=True) or {}
+    text = body.get("text", "")
+    if not text.strip():
+        return jsonify({"error": "Paste some text first"}), 400
+
+    try:
+        rows = parse_balances_text(text)
+    except Exception as e:
+        return jsonify({"error": f"Could not read the pasted text: {e}"}), 500
+
+    if not rows:
+        return jsonify({"error": "Couldn't find any leases in that text — make sure you copied the full table including lease ID numbers."}), 400
+
+    return jsonify({"ok": True, "sourceImage": None, "rows": rows})
+    
+
+
 @app.route("/admin/publish", methods=["POST"])
 @require_admin
 def admin_publish():
