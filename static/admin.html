@@ -203,6 +203,8 @@ function renderReview() {
         </select>
       </td>
       <td><input type="number" step="0.01" class="total-input" value="${r.total ?? ''}" /></td>
+      <td><input type="text" class="notes-input" placeholder="optional" value="${(r.notes || '').replace(/"/g, '&quot;')}" /></td>
+
       <td><button class="remove-row" data-id="${r.id}">✕</button></td>
     </tr>
   `).join("");
