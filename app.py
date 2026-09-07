@@ -41,8 +41,13 @@ CLIENT_SECRET = os.environ.get("BUILDIUM_CLIENT_SECRET")
 # manifest is empty again, "/" automatically falls back to the live
 # Buildium dashboard below.
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(os.path.dirname(__file__), "uploads"))
-MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "data", "manifest.json")
+# DATA_DIR points at a persistent volume in production (set via Railway) so
+# published balances and uploaded screenshots survive redeploys. Falls back
+# to the app folder itself for local testing where no volume exists.
+DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(__file__))
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(DATA_DIR, "uploads"))
+MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(MANIFEST_PATH), exist_ok=True)
