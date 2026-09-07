@@ -444,10 +444,11 @@ def admin_publish():
                 "label": (r.get("label") or "").strip(),
                 "leaseId": r.get("leaseId"),
                 "total": total,
-                "portfolio": r["portfolio"],
+          "portfolio": r["portfolio"],
+                "notes": (r.get("notes") or "").strip(),
             }
         )
-
+    
     data = {
         "asOf": int(time.time()),
         "sourceImage": source_image,
@@ -464,11 +465,13 @@ def api_portfolio_balances():
     rows = data["rows"]
     if portfolio:
         rows = [r for r in rows if r.get("portfolio") == portfolio]
-    return jsonify({
+        return jsonify({
         "asOf": data.get("asOf"),
         "rows": rows,
         "total": sum(r["total"] for r in rows),
+        "recipient": PORTFOLIOS.get(portfolio, {}).get("recipient") if portfolio else None,
     })
+
 
 
 @app.route("/admin/upload", methods=["POST"])
