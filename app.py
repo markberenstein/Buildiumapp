@@ -118,7 +118,8 @@ def clean_lease_label(rest):
 
     tenant = rest
     tenant = tenant.replace('$', ' ')
-    tenant = re.sub(r'[~\-_—–|()+»]', ' ', tenant)
+    tenant = re.sub(r'[~\-_—–|()+»«=¢{}"\u201c\u201d\u2018\u2019]', ' ', tenant)
+
     tenant = re.sub(r'\b\d{3,}\b', ' ', tenant)
     tenant = re.sub(r'\b\d{1,2}\b', ' ', tenant)
     tenant = re.sub(r'\.(?!\w)', ' ', tenant)
