@@ -98,6 +98,25 @@ def portfolio_for_text(text):
     return None
 
 
+def parse_amount(raw):
+    """
+    Robustly parse a dollar figure the way OCR actually renders it. OCR
+    sometimes uses a period instead of a comma before the thousands group
+    (e.g. "2.795.00" meaning $2,795.00). This treats the LAST separator +
+    2-digit group as the decimal part, and strips any other separators
+    as thousands grouping, so both "2,795.00" and "2.795.00" parse the
+    same way.
+    """
+    m = re.match(r'^([\d.,]+?)[.,](\d{2})$', raw)
+    if not m:
+        return None
+    integer_part, decimal_part = m.groups()
+    integer_part = re.sub(r'[.,]', '', integer_part)
+    if not integer_part.isdigit():
+        return None
+    return float(f"{integer_part}.{decimal_part}")
+
+
 def clean_lease_label(rest):
     """
     Turn the raw OCR leftover text for one lease (after the property name
@@ -165,12 +184,13 @@ def parse_balances_screenshot(image_path):
         id_match = re.search(r'\b(\d{6,8})\b', window)
         lease_id = id_match.group(1) if id_match else None
 
-        dollar_matches = re.findall(r'\$([\d,]+\.\d{2})', window)
-        amounts = [float(d.replace(',', '')) for d in dollar_matches]
+        dollar_tokens = re.findall(r'\$([\d.,]+)', window)
+        amounts = [parse_amount(tok) for tok in dollar_tokens]
+        amounts = [a for a in amounts if a is not None]
         total = max(amounts) if amounts else None
 
         rest = window[m.end() - row_start:]
-        rest = re.sub(r'\$[\d,]+\.\d{2}', '', rest)
+        rest = re.sub(r'\$[\d.,]+', '', rest)
         if lease_id:
             rest = rest.replace(lease_id, '')
 
@@ -242,316 +262,3 @@ def buildium_headers():
 
 def buildium_get(path, params=None):
     resp = requests.get(
-        f"{BUILDIUM_BASE_URL}{path}",
-        headers=buildium_headers(),
-        params=params or {},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def fetch_all_pages(path, params=None, page_size=200, hard_limit=5000):
-    """Buildium paginates with offset/limit. Walk pages until exhausted."""
-    params = dict(params or {})
-    params["limit"] = page_size
-    offset = 0
-    out = []
-    while True:
-        params["offset"] = offset
-        batch = buildium_get(path, params)
-        if not batch:
-            break
-        out.extend(batch)
-        if len(batch) < page_size or len(out) >= hard_limit:
-            break
-        offset += page_size
-    return out
-
-
-def require_cache_or_fetch(force=False):
-    now = time.time()
-    if not force and _cache["data"] is not None and (now - _cache["fetched_at"]) < CACHE_SECONDS:
-        return _cache["data"]
-
-    # 1. Outstanding balances per lease (aging buckets included).
-    balances = fetch_all_pages("/leases/outstandingbalances")
-
-    # 2. Rentals (properties) — for property names/addresses.
-    rentals = fetch_all_pages("/rentals")
-    rentals_by_id = {r["Id"]: r for r in rentals}
-
-    # 3. Units — for unit numbers, keyed by unit id.
-    units_by_id = {}
-    for r in rentals:
-        for u in r.get("Units", []) or []:
-            units_by_id[u["Id"]] = u
-
-    # 4. Leases — for tenant names, keyed by lease id.
-    leases = fetch_all_pages("/leases")
-    leases_by_id = {l["Id"]: l for l in leases}
-
-    rows = []
-    for b in balances:
-        lease_id = b.get("LeaseId")
-        property_id = b.get("PropertyId")
-        unit_id = b.get("UnitId")
-
-        lease = leases_by_id.get(lease_id, {})
-        prop = rentals_by_id.get(property_id, {})
-        unit = units_by_id.get(unit_id, {})
-
-        tenants = lease.get("CurrentTenants") or lease.get("Tenants") or []
-        tenant_names = ", ".join(
-            f"{t.get('FirstName', '').strip()} {t.get('LastName', '').strip()}".strip()
-            for t in tenants
-        ) or "—"
-
-        rows.append(
-            {
-                "leaseId": lease_id,
-                "property": prop.get("Name", f"Property {property_id}"),
-                "unit": unit.get("UnitNumber", "—"),
-                "tenant": tenant_names,
-                "bucket_0_30": b.get("Balance0to30Days", 0) or 0,
-                "bucket_31_60": b.get("Balance31to60Days", 0) or 0,
-                "bucket_61_90": b.get("Balance61to90Days", 0) or 0,
-                "bucket_90_plus": b.get("BalanceOver90Days", 0) or 0,
-                "total": b.get("TotalBalance", 0) or 0,
-                "noticeGiven": bool(lease.get("IsNoticeGiven")) if lease else False,
-                "evictionPending": bool(b.get("EvictionPendingDate")),
-            }
-        )
-
-    rows.sort(key=lambda r: r["total"], reverse=True)
-
-    result = {
-        "generatedAt": int(now),
-        "rows": rows,
-        "totals": {
-            "total": sum(r["total"] for r in rows),
-            "bucket_0_30": sum(r["bucket_0_30"] for r in rows),
-            "bucket_31_60": sum(r["bucket_31_60"] for r in rows),
-            "bucket_61_90": sum(r["bucket_61_90"] for r in rows),
-            "bucket_90_plus": sum(r["bucket_90_plus"] for r in rows),
-        },
-    }
-
-    _cache["data"] = result
-    _cache["fetched_at"] = now
-    return result
-
-
-@app.route("/api/balances")
-def api_balances():
-    force = request.args.get("refresh") == "1"
-    try:
-        data = require_cache_or_fetch(force=force)
-        return jsonify(data)
-    except requests.HTTPError as e:
-        return jsonify({"error": f"Buildium API error: {e}"}), 502
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/")
-def index():
-    # If you've uploaded any screenshots, show those to everyone.
-    # Otherwise, fall back to the live Buildium dashboard.
-    if load_manifest():
-        return send_from_directory(app.static_folder, "gallery.html")
-    return send_from_directory(app.static_folder, "index.html")
-
-
-@app.route("/api/screenshots")
-def api_screenshots():
-    portfolio = request.args.get("portfolio")
-    entries = load_manifest()
-    if portfolio:
-        entries = [e for e in entries if e.get("portfolio") == portfolio]
-    entries = sorted(entries, key=lambda e: e["uploadedAt"], reverse=True)
-    return jsonify({"entries": entries})
-
-
-@app.route("/ba-partners")
-def view_ba_partners():
-    return send_from_directory(app.static_folder, "ba-partners.html")
-
-@app.route("/ford-owed")
-def view_ford_owed():
-    return send_from_directory(app.static_folder, "ford-owned.html")
-
-
-@app.route("/steve-jeanne")
-def view_steve_jeanne():
-    return send_from_directory(app.static_folder, "steve-jeanne.html")
-
-
-
-@app.route("/berenstein-associates")
-def view_berenstein():
-    return send_from_directory(app.static_folder, "berenstein-associates.html")
-
-
-@app.route("/api/portfolios")
-def api_portfolios():
-    return jsonify(PORTFOLIOS)
-
-
-@app.route("/uploads/<path:filename>")
-def serve_upload(filename):
-    safe = secure_filename(filename)
-    return send_from_directory(UPLOAD_FOLDER, safe)
-
-
-@app.route("/admin")
-def admin_page():
-    return send_from_directory(app.static_folder, "admin.html")
-
-
-@app.route("/admin/status")
-def admin_status():
-    return jsonify({"loggedIn": bool(session.get("is_admin"))})
-
-
-@app.route("/admin/login", methods=["POST"])
-def admin_login():
-    if not ADMIN_PASSWORD:
-        return jsonify({"error": "Set ADMIN_PASSWORD on the server first."}), 500
-    body = request.get_json(silent=True) or {}
-    if body.get("password") == ADMIN_PASSWORD:
-        session["is_admin"] = True
-        return jsonify({"ok": True})
-    return jsonify({"error": "Wrong password"}), 401
-
-
-@app.route("/admin/logout", methods=["POST"])
-def admin_logout():
-    session.clear()
-    return jsonify({"ok": True})
-
-
-@app.route("/admin/parse", methods=["POST"])
-@require_admin
-def admin_parse():
-    file = request.files.get("file")
-    if not file or file.filename == "":
-        return jsonify({"error": "No file provided"}), 400
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if ext not in ALLOWED_EXTENSIONS:
-        return jsonify({"error": f"Unsupported file type: .{ext}"}), 400
-
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(path)
-
-    try:
-        rows = parse_balances_screenshot(path)
-    except Exception as e:
-        return jsonify({"error": f"Could not read the image: {e}"}), 500
-
-    return jsonify({"ok": True, "sourceImage": filename, "rows": rows})
-
-
-@app.route("/admin/publish", methods=["POST"])
-@require_admin
-def admin_publish():
-    body = request.get_json(silent=True) or {}
-    rows = body.get("rows")
-    source_image = body.get("sourceImage")
-    if not isinstance(rows, list):
-      return jsonify({"error": "Missing rows"}), 400
-
-    cleaned = []
-    for r in rows:
-        try:
-            total = float(r.get("total"))
-        except (TypeError, ValueError):
-            return jsonify({"error": f"Row '{r.get('label', '')}' has no valid balance"}), 400
-        if r.get("portfolio") not in PORTFOLIOS:
-            return jsonify({"error": f"Row '{r.get('label', '')}' has no valid portfolio"}), 400
-        cleaned.append(
-            {
-                "id": r.get("id") or uuid.uuid4().hex,
-                "label": (r.get("label") or "").strip(),
-                "leaseId": r.get("leaseId"),
-                "total": total,
-                "portfolio": r["portfolio"],
-                "notes": (r.get("notes") or "").strip(),
-            }
-        )
-  
-    
-    data = {
-        "asOf": int(time.time()),
-        "sourceImage": source_image,
-        "rows": cleaned,
-    }
-    save_balances(data)
-    return jsonify({"ok": True, **data})
-
-
-@app.route("/api/portfolio-balances")
-def api_portfolio_balances():
-    portfolio = request.args.get("portfolio")
-    data = load_balances()
-    rows = data["rows"]
-    if portfolio:
-        rows = [r for r in rows if r.get("portfolio") == portfolio]
-    return jsonify({
-        "asOf": data.get("asOf"),
-        "rows": rows,
-        "total": sum(r["total"] for r in rows),
-        "recipient": PORTFOLIOS.get(portfolio, {}).get("recipient") if portfolio else None,
-    })
-        
-
-@app.route("/admin/upload", methods=["POST"])
-@require_admin
-def admin_upload():
-    file = request.files.get("file")
-    caption = (request.form.get("caption") or "").strip()
-    portfolio = (request.form.get("portfolio") or "").strip()
-    if not file or file.filename == "":
-        return jsonify({"error": "No file provided"}), 400
-    if portfolio not in PORTFOLIOS:
-        return jsonify({"error": "Choose a valid portfolio"}), 400
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if ext not in ALLOWED_EXTENSIONS:
-        return jsonify({"error": f"Unsupported file type: .{ext}"}), 400
-
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    file.save(os.path.join(UPLOAD_FOLDER, filename))
-
-    entries = load_manifest()
-    entries.append(
-        {
-            "id": uuid.uuid4().hex,
-            "filename": filename,
-            "caption": caption,
-            "portfolio": portfolio,
-            "uploadedAt": int(time.time()),
-        }
-    )
-    save_manifest(entries)
-    return jsonify({"ok": True, "entries": entries})
-
-
-@app.route("/admin/delete/<entry_id>", methods=["POST"])
-@require_admin
-def admin_delete(entry_id):
-    entries = load_manifest()
-    keep, remove = [], []
-    for e in entries:
-        (remove if e["id"] == entry_id else keep).append(e)
-    for e in remove:
-        path = os.path.join(UPLOAD_FOLDER, e["filename"])
-        if os.path.exists(path):
-            os.remove(path)
-    save_manifest(keep)
-    return jsonify({"ok": True, "entries": keep})
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=os.environ.get("DEBUG") == "1")
