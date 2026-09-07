@@ -150,8 +150,86 @@ def clean_lease_label(rest):
         return f"{unit_label}: {tenant}"
     return tenant
 
+def clean_pasted_label(line):
+    """
+    Given a line copied straight from Buildium's table, like
+    "409 Rogell Court - Apartment #4 | Joselin Araica de Urtecho" or
+    "Teagarden - 2414 | Christian Hernandez / 510 Renegade Jiu-Jitsu",
+    split cleanly on " | " and the first " - " to get unit + tenant.
+    Pasted text is exact, so this is far more reliable than the OCR
+    cleanup above.
+    """
+    if '|' in line:
+        left, tenant = line.split('|', 1)
+    else:
+        left, tenant = line, ''
+    left = left.strip()
+    tenant = tenant.strip()
+
+    if ' - ' in left:
+        _, unit = left.split(' - ', 1)
+        unit = unit.strip()
+    else:
+        unit = left
+
+    if unit:
+        return f"{unit}: {tenant}"
+    return tenant
+
+
+def parse_balances_text(raw_text):
+    """
+    Parse balances from text copied and pasted directly off Buildium's
+    outstanding-balances page (not a screenshot). Each lease appears as
+    three lines: a description line, a lease-ID line (6-8 bare digits),
+    then a tab-separated amounts line ending in the BALANCE column.
+    Since this is real text rather than an OCR guess, there's no risk
+    of misread digits.
+    """
+    lines = [l.strip() for l in raw_text.splitlines()]
+    n = len(lines)
+    rows = []
+    for i, line in enumerate(lines):
+        if not re.match(r'^\d{6,8}$', line):
+            continue
+        lease_id = line
+
+        desc_line = None
+        for j in range(i - 1, -1, -1):
+            if lines[j]:
+                desc_line = lines[j]
+                break
+
+        amounts_line = None
+        for j in range(i + 1, n):
+            if lines[j]:
+                amounts_line = lines[j]
+                break
+
+        if not desc_line or not amounts_line:
+            continue
+
+        tokens = [t.strip() for t in amounts_line.split('\t') if t.strip()]
+        dollar_tokens = [t for t in tokens if t.startswith('$')]
+        total = parse_amount(dollar_tokens[-1].lstrip('$')) if dollar_tokens else None
+
+        label = clean_pasted_label(desc_line)
+        portfolio = portfolio_for_text(desc_line)
+        rows.append(
+            {
+                "id": uuid.uuid4().hex,
+                "label": label,
+                "leaseId": lease_id,
+                "total": total,
+                "portfolio": portfolio,
+                "needsReview": total is None,
+            }
+        )
+    return rows
+
 
 def parse_balances_screenshot(image_path):
+
     """
     OCR a Buildium 'outstanding lease balances' screenshot and split it into
     per-lease rows. Property names are used as row boundaries (Buildium's
