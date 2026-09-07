@@ -48,26 +48,31 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.dirname(MANIFEST_PATH), exist_ok=True)
 
 # Property portfolios — each gets its own installable app / URL.
+
 PORTFOLIOS = {
     "ba-partners": {
         "label": "BA Partners",
         "properties": "Rogell Court, Fulton Place",
         "page": "ba-partners.html",
+        "recipient": "Adam",
     },
     "ford-owed": {
         "label": "Ford Owed",
         "properties": "Church Street",
         "page": "ford-owned.html",
+        "recipient": "Ford",
     },
     "steve-jeanne": {
         "label": "Steve and Jeanne Owned",
         "properties": "Pierce Street, Broderick",
         "page": "steve-jeanne.html",
+        "recipient": "Steve",
     },
      "berenstein-associates": {
         "label": "Berenstein Associates",
         "properties": "Teagarden",
         "page": "berenstein-associates.html",
+        "recipient": "Dad",
     },
 
     
