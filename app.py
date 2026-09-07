@@ -91,7 +91,8 @@ PORTFOLIO_KEYWORDS = {
     "berenstein-associates": ["teagarden"],
 }
 
-BALANCES_PATH = os.path.join(os.path.dirname(__file__), "data", "balances.json")
+BALANCES_PATH = os.path.join(DATA_DIR, "balances.json")
+
 
 
 def portfolio_for_text(text):
