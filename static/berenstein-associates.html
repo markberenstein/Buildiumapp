@@ -40,6 +40,22 @@
   td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
   tfoot td { padding: 10px 12px; font-weight: 700; border-top: 1px solid var(--hairline); background: var(--ledger-soft); }
   .empty { padding: 40px; text-align: center; color: var(--ink-soft); }
+  .export-block { margin-top: 24px; }
+  button.ghost {
+    padding: 10px 16px; background: transparent; border: 1px solid var(--ledger); color: var(--ledger);
+    border-radius: 6px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  }
+  button.ghost:hover { background: var(--ledger-soft); }
+  button.solid {
+    padding: 10px 16px; background: var(--ledger); color: #fff; border: none;
+    border-radius: 6px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  }
+  textarea#export-text {
+    width: 100%; min-height: 220px; margin-top: 12px; padding: 12px; box-sizing: border-box;
+    border: 1px solid var(--hairline); border-radius: 8px; font: inherit; font-size: 13.5px;
+    background: var(--panel); color: var(--ink);
+  }
+  .export-row { display: flex; gap: 10px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -51,10 +67,27 @@
   <div class="as-of" id="as-of"></div>
   <div class="total-figure" id="total-figure">—</div>
   <div id="table-wrap"><div class="empty">Loading…</div></div>
+  <div class="export-block">
+    <button class="ghost" id="export-btn">Export reminder text</button>
+    <div id="export-output" style="display:none">
+      <textarea id="export-text" readonly></textarea>
+      <div class="export-row">
+        <button class="solid" id="copy-btn">Copy</button>
+        <button class="ghost" id="download-btn">Download .txt</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const RECIPIENT = "Dad";
+let lastRows = [];
+
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 
 async function load() {
   const res = await fetch("/api/portfolio-balances?portfolio=berenstein-associates");
@@ -70,16 +103,18 @@ async function load() {
     wrap.innerHTML = '<div class="empty">No balances posted yet.</div>';
     return;
   }
-  const unitNumber = (label) => {
+
+    const unitNumber = (label) => {
     const text = label || '';
     const hash = text.match(/#\s*(\d+)/);
     if (hash) return parseInt(hash[1], 10);
     const m = text.match(/\d+/);
     return m ? parseInt(m[0], 10) : Infinity;
   };
-  const rows = [...data.rows].sort((a, b) => unitNumber(a.label) - unitNumber(b.label));
+    const rows = [...data.rows].sort((a, b) => unitNumber(a.label) - unitNumber(b.label));
+  lastRows = rows;
 
-    
+  
 
   wrap.innerHTML = `
     <table>
@@ -92,6 +127,35 @@ async function load() {
   `;
 }
 load();
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  const day = ordinal(new Date().getDate());
+  const owing = lastRows.filter(r => r.total > 0);
+  const lines = owing.map((r, i) => {
+    const note = r.notes ? `: ${r.notes}` : '';
+    return `${i + 1}. ${r.label || ''}${note}`;
+  });
+  const text = `Hi ${RECIPIENT},\n\nHere are the outstanding rents as of the ${day}:\n\n${lines.join('\n')}\n\nPlease let me know if it's okay to send them the first reminder of rents not received.`;
+  document.getElementById("export-text").value = text;
+  document.getElementById("export-output").style.display = "block";
+});
+
+document.getElementById("copy-btn").addEventListener("click", () => {
+  const ta = document.getElementById("export-text");
+  ta.select();
+  navigator.clipboard.writeText(ta.value).catch(() => document.execCommand("copy"));
+});
+
+document.getElementById("download-btn").addEventListener("click", () => {
+  const text = document.getElementById("export-text").value;
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "outstanding-rents.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+});
 </script>
 </body>
 </html>
