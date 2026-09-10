@@ -135,7 +135,8 @@ document.getElementById("export-btn").addEventListener("click", () => {
     const note = r.notes ? `: ${r.notes}` : '';
     return `${i + 1}. ${r.label || ''}${note}`;
   });
-  const text = `Hi ${RECIPIENT},\n\nHere are the outstanding rents as of the ${day}:\n\n${lines.join('\n')}\n\nPlease let me know if it's okay to send them the reminder of rents not received.`;
+  const text = `Hi ${RECIPIENT},\n\nHere are the outstanding rents as of the ${day}:\n\n${lines.join('\n\n')}\n\nPlease let me know if it's okay to send them the reminder of rents not received.`;
+
   document.getElementById("export-text").value = text;
   document.getElementById("export-output").style.display = "block";
 });
